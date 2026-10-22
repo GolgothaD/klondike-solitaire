@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#1d5c2e">
+<title>Solitaire</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='2' width='22' height='28' rx='3' fill='%23fffdf8' stroke='%23333'/%3E%3Cpath d='M16 9c3 5 7 6 7 10a3.5 3.5 0 0 1-6 2l1 4h-4l1-4a3.5 3.5 0 0 1-6-2c0-4 4-5 7-10z' fill='%23c3202b'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="bar">
+  <div class="brand"><span class="logo">♠</span> Solitaire</div>
+  <nav>
+    <button id="bNew" title="New deal (F2)"><span class="ic">✦</span><span class="lb">New</span></button>
+    <button id="bUndo" title="Undo (Ctrl+Z)"><span class="ic">↶</span><span class="lb">Undo</span></button>
+    <button id="bHint" title="Hint (H)"><span class="ic">?</span><span class="lb">Hint</span></button>
+    <button id="bStats" title="Statistics"><span class="ic">≡</span><span class="lb">Stats</span></button>
+    <button id="bOpts" title="Options"><span class="ic">⚙</span><span class="lb">Options</span></button>
+  </nav>
+</header>
+<main id="board" aria-label="Solitaire table"></main>
+<footer id="status">
+  <span id="sScore">Score: 0</span><span id="sTime">Time: 0:00</span><span id="sMoves">Moves: 0</span>
+</footer>
+<div id="toast" role="status"></div>
+<canvas id="winfx"></canvas>
+
+<div class="modal" id="mConfirm" hidden><div class="panel">
+  <h2>Start a new game?</h2><p>Your current game will be counted as a loss.</p>
+  <div class="row"><button data-close>Keep playing</button><button class="primary" id="cNewYes">Deal again</button></div>
+</div></div>
+
+<div class="modal" id="mOpts" hidden><div class="panel">
+  <h2>Options</h2>
+  <fieldset><legend>Draw</legend>
+    <label><input type="radio" name="draw" value="1"> Draw one</label>
+    <label><input type="radio" name="draw" value="3"> Draw three</label></fieldset>
+  <fieldset><legend>Scoring</legend>
+    <label><input type="radio" name="scoring" value="standard"> Standard</label>
+    <label><input type="radio" name="scoring" value="vegas"> Vegas</label>
+    <label><input type="radio" name="scoring" value="none"> None</label></fieldset>
+  <fieldset><legend>Play</legend>
+    <label><input type="checkbox" id="oTimed"> Timed game</label>
+    <label><input type="checkbox" id="oTap"> Tap a card to auto-move</label>
+    <label><input type="checkbox" id="oStatus"> Show status bar</label></fieldset>
+  <fieldset><legend>Card back</legend><div id="backs"></div></fieldset>
+  <p class="note" id="oNote">Draw and scoring changes start a new deal.</p>
+  <div class="row"><button data-close>Cancel</button><button class="primary" id="oSave">OK</button></div>
+</div></div>
+
+<div class="modal" id="mStats" hidden><div class="panel">
+  <h2>Statistics</h2><table id="statsT"></table>
+  <div class="row"><button id="stReset">Reset</button><button class="primary" data-close>Close</button></div>
+</div></div>
+
+<div class="modal" id="mWin" hidden><div class="panel">
+  <h2>You won!</h2><p id="winText"></p>
+  <div class="row"><button data-close>Admire</button><button class="primary" id="wNew">Deal again</button></div>
+</div></div>
+
+<script src="engine.js"></script>
+<script src="cards.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
