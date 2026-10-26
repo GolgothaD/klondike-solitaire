@@ -50,6 +50,7 @@
       next.style.backgroundImage = 'url(' + url + ')'; next.classList.add('on'); prev.classList.remove('on'); bgFlip = !bgFlip;
     }; im.src = url;
     document.querySelector('meta[name=theme-color]').setAttribute('content', theme.meta || '#0b0f14');
+    if (Art.setFaceTheme) Art.setFaceTheme(theme.id);
     FX.setTheme(theme); if (window.ThemeCursor) ThemeCursor.set(theme.id);
     A.config({ sfx: settings.sfx / 100, music: settings.music / 100, flavor: theme.sfx });
     A.setMusic(theme.music);
@@ -629,7 +630,7 @@
     cancelHold();
     $('themeGrid').innerHTML = THEMES.map(function (t) {
       return '<button class="th' + (t.id === theme.id ? ' sel' : '') + '" data-theme="' + t.id + '"><span class="pv" style="background-image:url(bg/' + t.id + '_t.webp)"></span>' +
-        '<span class="cards"><img alt="" src="' + Art.backURI(t.back) + '"><img alt="" src="' + Art.faceURI(1, 1, false) + '"></span>' +
+        '<span class="cards"><img alt="" src="' + Art.backURI(t.back) + '"><img alt="" src="' + Art.faceURI(1, 1, false, t.id) + '"></span>' +
         '<span class="chk">✓</span><span class="sw" style="background:' + t.accent + '"></span><span class="lab"><b>' + t.name + '</b><small>' + t.sub + '</small></span></button>';
     }).join('');
     open('mThemes');
