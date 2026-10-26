@@ -2,13 +2,13 @@
  "id": "./",
  "name": "Klondike Solitaire",
  "short_name": "Solitaire",
- "description": "Classic Klondike solitaire.",
+ "description": "Klondike solitaire with eight themed tables, music, daily deals and controller support.",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",
  "orientation": "any",
- "background_color": "#1e6b32",
- "theme_color": "#1d5c2e",
+ "background_color": "#0b1a10",
+ "theme_color": "#0b2a17",
  "icons": [
   {
    "src": "icons/icon-48.png",

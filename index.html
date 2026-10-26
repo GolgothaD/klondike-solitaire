@@ -3,65 +3,141 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-
 <title>Solitaire</title>
-
-
+<link rel="preload" href="fonts/outfit.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
-<meta name="theme-color" content="#1d5c2e"><link rel="manifest" href="manifest.json"><link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"></head>
+<meta name="theme-color" content="#0b2a17"><link rel="manifest" href="manifest.json"><link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
 <body>
-<header id="bar">
-  <div class="brand"><span class="logo">♠</span> Solitaire</div>
-  <nav>
-    <button id="bNew" title="New deal (F2)"><span class="ic">✦</span><span class="lb">New</span></button>
-    <button id="bUndo" title="Undo (Ctrl+Z)"><span class="ic">↶</span><span class="lb">Undo</span></button>
-    <button id="bHint" title="Hint (H)"><span class="ic">?</span><span class="lb">Hint</span></button>
-    <button id="bStats" title="Statistics"><span class="ic">≡</span><span class="lb">Stats</span></button>
-    <button id="bOpts" title="Options"><span class="ic">⚙</span><span class="lb">Options</span></button>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-new" viewBox="0 0 24 24"><rect x="4" y="3" width="11" height="15" rx="2"/><path d="M9 21h9a2 2 0 0 0 2-2V8"/><path d="M9.5 8v5M7 10.5h5"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.3 0 2-.8 2-1.8 0-1.3-1-1.6-1-2.7 0-1 .8-1.5 2-1.5h2a4 4 0 0 0 4-4C21 6.2 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.3"/><circle cx="10" cy="7" r="1.3"/><circle cx="14.5" cy="7" r="1.3"/></symbol>
+  <symbol id="i-hint" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-moves" viewBox="0 0 24 24"><path d="M7 4v16M7 4 4 7M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+</svg>
+
+<div id="bg"><div class="bgl" id="bgA"></div><div class="bgl" id="bgB"></div><div id="shade"></div></div>
+<canvas id="ambient" aria-hidden="true"></canvas>
+
+<div id="app">
+  <header id="hud">
+    <div class="chips">
+      <div class="chip" id="cScore"><svg><use href="#i-star"/></svg><b id="sScore">0</b></div>
+      <div class="chip" id="cTime"><svg><use href="#i-clock"/></svg><b id="sTime">0:00</b></div>
+      <div class="chip" id="cMoves"><svg><use href="#i-moves"/></svg><b id="sMoves">0</b></div>
+      <div class="chip daily" id="cDaily" hidden><svg><use href="#i-cal"/></svg><b>Daily</b></div>
+    </div>
+  </header>
+  <main id="board" aria-label="Solitaire table"></main>
+  <nav id="dock">
+    <button class="db" id="bNew" title="New game (F2)"><svg><use href="#i-new"/></svg><span>New</span></button>
+    <button class="db" id="bTheme" title="Themes (T)"><svg><use href="#i-theme"/></svg><span>Themes</span></button>
+    <button class="db" id="bHint" title="Hint (H)"><svg><use href="#i-hint"/></svg><span>Hint</span></button>
+    <button class="db" id="bUndo" title="Undo (Ctrl+Z)"><svg><use href="#i-undo"/></svg><span>Undo</span></button>
+    <button class="db" id="bMenu" title="Menu (Esc)"><svg><use href="#i-menu"/></svg><span>Menu</span></button>
   </nav>
-</header>
-<main id="board" aria-label="Solitaire table"></main>
-<footer id="status">
-  <span id="sScore">Score: 0</span><span id="sTime">Time: 0:00</span><span id="sMoves">Moves: 0</span>
-</footer>
+</div>
+
+<button id="bAuto" hidden><svg><use href="#i-auto"/></svg>Auto-finish</button>
+<div id="combo" aria-live="polite"></div>
 <div id="toast" role="status"></div>
+<div id="padCursor" hidden></div>
+<canvas id="fx" aria-hidden="true"></canvas>
 <canvas id="winfx"></canvas>
 
-<div class="modal" id="mConfirm" hidden><div class="panel">
-  <h2>Start a new game?</h2><p>Your current game will be counted as a loss.</p>
-  <div class="row"><button data-close>Keep playing</button><button class="primary" id="cNewYes">Deal again</button></div>
+<div class="modal" id="mMenu" hidden><div class="panel menu">
+  <div class="logo-lg"><span class="suits">♠<i>♥</i>♣<i>♦</i></span><h1>Solitaire</h1><small>Klondike</small></div>
+  <button class="big primary" data-act="resume">Resume</button>
+  <button class="big" data-act="new">New game</button>
+  <button class="big" data-act="daily">Daily deal <em id="dailyTag"></em></button>
+  <div class="grid2">
+    <button class="big" data-act="themes">Themes</button>
+    <button class="big" data-act="stats">Statistics</button>
+    <button class="big" data-act="opts">Settings</button>
+    <button class="big" data-act="help">How to play</button>
+  </div>
+  <button class="link" data-act="credits">Credits</button>
 </div></div>
 
-<div class="modal" id="mOpts" hidden><div class="panel">
-  <h2>Options</h2>
-  <fieldset><legend>Draw</legend>
-    <label><input type="radio" name="draw" value="1"> Draw one</label>
-    <label><input type="radio" name="draw" value="3"> Draw three</label></fieldset>
-  <fieldset><legend>Scoring</legend>
-    <label><input type="radio" name="scoring" value="standard"> Standard</label>
-    <label><input type="radio" name="scoring" value="vegas"> Vegas</label>
-    <label><input type="radio" name="scoring" value="none"> None</label></fieldset>
-  <fieldset><legend>Play</legend>
-    <label><input type="checkbox" id="oTimed"> Timed game</label>
-    <label><input type="checkbox" id="oTap"> Tap a card to auto-move</label>
-    <label><input type="checkbox" id="oStatus"> Show status bar</label></fieldset>
-  <fieldset><legend>Card back</legend><div id="backs"></div></fieldset>
-  <p class="note" id="oNote">Draw and scoring changes start a new deal.</p>
-  <div class="row"><button data-close>Cancel</button><button class="primary" id="oSave">OK</button></div>
+<div class="modal" id="mThemes" hidden><div class="panel wide">
+  <h2>Themes</h2><p class="sub">Each table has its own art, card back, colours, music and atmosphere.</p>
+  <div id="themeGrid"></div>
+  <div class="row"><button class="btn primary" data-close>Done</button></div>
+</div></div>
+
+<div class="modal" id="mConfirm" hidden><div class="panel">
+  <h2 id="cfTitle">Start a new game?</h2><p id="cfText">Your current game will count as a loss.</p>
+  <div class="row"><button class="btn" data-close>Keep playing</button><button class="btn primary" id="cNewYes">Deal</button></div>
+</div></div>
+
+<div class="modal" id="mOpts" hidden><div class="panel wide">
+  <h2>Settings</h2>
+  <div class="opts">
+    <section><h3>Game</h3>
+      <div class="seg" data-opt="drawCount"><button data-v="1">Draw 1</button><button data-v="3">Draw 3</button></div>
+      <div class="seg" data-opt="scoring"><button data-v="standard">Standard</button><button data-v="vegas">Vegas</button><button data-v="none">No score</button></div>
+      <label class="tog"><input type="checkbox" id="oTimed"><span></span>Timed game</label>
+      <label class="tog"><input type="checkbox" id="oTap"><span></span>Tap a card to auto-move</label>
+      <label class="tog"><input type="checkbox" id="oAutoFin"><span></span>Offer auto-finish</label>
+    </section>
+    <section><h3>Sound &amp; feel</h3>
+      <label class="sl">Effects<input type="range" id="oSfx" min="0" max="100" step="5"></label>
+      <label class="sl">Music<input type="range" id="oMus" min="0" max="100" step="5"></label>
+      <label class="tog"><input type="checkbox" id="oHap"><span></span>Vibration (Android)</label>
+      <h3>Win celebration</h3>
+      <div class="seg" data-opt="winStyle"><button data-v="auto">Match theme</button><button data-v="modern">Fireworks</button><button data-v="classic">Classic bounce</button></div>
+    </section>
+    <section class="full"><h3>Card back</h3><div id="backs"></div></section>
+  </div>
+  <p class="note">Draw, scoring and timer changes start a new deal.</p>
+  <div class="row"><button class="btn" data-close>Cancel</button><button class="btn primary" id="oSave">Save</button></div>
 </div></div>
 
 <div class="modal" id="mStats" hidden><div class="panel">
-  <h2>Statistics</h2><table id="statsT"></table>
-  <div class="row"><button id="stReset">Reset</button><button class="primary" data-close>Close</button></div>
+  <h2>Statistics</h2><div id="statsT"></div>
+  <div class="row"><button class="btn" id="stReset">Reset</button><button class="btn primary" data-close>Close</button></div>
 </div></div>
 
-<div class="modal" id="mWin" hidden><div class="panel">
-  <h2>You won!</h2><p id="winText"></p>
-  <div class="row"><button data-close>Admire</button><button class="primary" id="wNew">Deal again</button></div>
+<div class="modal" id="mWin" hidden><div class="panel win">
+  <div class="burst"></div>
+  <h2>You won!</h2><div id="winStars"></div>
+  <div id="winText"></div>
+  <div class="row"><button class="btn" data-close>Admire</button><button class="btn primary" id="wNew">Deal again</button></div>
+</div></div>
+
+<div class="modal" id="mHelp" hidden><div class="panel">
+  <h2>How to play</h2>
+  <p>Build the four foundations up by suit from Ace to King. In the columns, stack cards down in alternating colours; only a King may fill an empty column.</p>
+  <ul class="help">
+    <li><b>Touch / mouse:</b> drag cards, or tap one to send it to its best spot. Tap the deck to draw.</li>
+    <li><b>Keyboard:</b> arrows move the cursor, Enter picks up and drops, Space draws, A auto-moves, H hint, Ctrl+Z undo, T themes.</li>
+    <li><b>Controller:</b> D-pad moves, A pick up/drop, X auto-move, Y hint, B cancel/undo, LB undo, RB draw, Start menu, View themes.</li>
+  </ul>
+  <div class="row"><button class="btn primary" data-close>Got it</button></div>
+</div></div>
+
+<div class="modal" id="mCredits" hidden><div class="panel">
+  <h2>Credits</h2>
+  <div class="credits">
+    <p><b>Music</b> by Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 4.0 — <i>Bossa Antigua, Jazz Brunch, Floating Cities, Enchanted Valley, Lightless Dawn, Ishikari Lore, Dreamy Flashback, Wallpaper</i>.</p>
+    <p><b>Card sounds</b> from the Casino Audio pack by Kenney (kenney.nl), CC0.</p>
+    <p><b>Fonts</b>: Outfit and Cinzel, SIL Open Font License.</p>
+    <p><b>Table art</b> generated for this game and upscaled with Real-ESRGAN.</p>
+  </div>
+  <div class="row"><button class="btn primary" data-close>Close</button></div>
 </div></div>
 
 <script src="engine.js"></script>
 <script src="cards.js"></script>
+<script src="themes.js"></script>
+<script src="audio.js"></script>
+<script src="fx.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

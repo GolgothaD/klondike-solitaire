@@ -43,7 +43,7 @@
   function snapshot(st) {
     var h = st.history; st.history = undefined; var c = JSON.parse(JSON.stringify(st)); st.history = h; delete c.history; return c;
   }
-  function pushHistory(st) { st.history.push(snapshot(st)); if (st.history.length > 1000) st.history.shift(); }
+  function pushHistory(st) { st.history.push(snapshot(st)); if (st.history.length > 100000) st.history.shift(); }
   function addScore(st, n) {
     if (st.scoring === 'none') return;
     st.score += n;
