@@ -88,5 +88,29 @@
     sfxBus.gain.value = opts.sfx; musBus.gain.value = opts.music; lp.frequency.value = opts.flavor.lp;
     if (opts.music <= 0 && musicEl) musicEl.pause(); else if (unlocked) startMusic();
   }
-  root.SFX = { play: play, setMusic: setMusic, config: config, unlock: unlock, get state() { return { ctx: ctx && ctx.state, music: musicEl && !musicEl.paused, track: musicTrack, voices: voices, loaded: Object.keys(buffers).length }; } };
+  // Warm, soft win fanfare synthesised per theme: rounded triangle/sine voices, slow attacks, a gentle
+  // low-pass and long releases (no bright dings). Goes through the SFX bus, so the SFX slider/mute and
+  // the background pause (context suspend) apply to it.
+  var FAN = { casino: [196, [0, 4, 7, 12], [0, 4, 7, 11, 14]], walnut: [174.6, [0, 4, 9, 7], [0, 4, 7, 11, 14]], neon: [220, [0, 7, 10, 15], [0, 3, 7, 10, 14]],
+    forest: [293.7, [0, 2, 7, 9], [0, 4, 7, 9, 14]], nebula: [164.8, [0, 7, 12, 19], [0, 7, 12, 16, 19]], zen: [293.7, [0, 5, 7, 12], [0, 5, 7, 10, 14], 1],
+    reef: [261.6, [0, 4, 9, 12], [0, 4, 7, 9, 12]], classic: [261.6, [0, 4, 7, 12], [0, 4, 7, 12, 16]] };
+  function fanfare(id) {
+    if (!ctx || ctx.state !== 'running' || document.hidden || opts.sfx <= 0) return false;
+    var f = FAN[id] || FAN.casino, now = ctx.currentTime + .03, out = ctx.createGain(), lf = ctx.createBiquadFilter();
+    lf.type = 'lowpass'; lf.frequency.value = 2200; lf.Q.value = .4; out.gain.value = .55; out.connect(lf); lf.connect(sfxBus);
+    function note(semi, t, len, peak, pluck) {
+      var fr = f[0] * Math.pow(2, semi / 12);
+      [['triangle', 1, 1], ['sine', .5, .6], ['sine', 2.001, .12]].forEach(function (v) {
+        var o = ctx.createOscillator(), g = ctx.createGain(); o.type = v[0]; o.frequency.value = fr * v[1]; o.detune.value = (Math.random() - .5) * 8;
+        var a = pluck ? .012 : .07, p = peak * v[2]; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(p, t + a);
+        g.gain.setTargetAtTime(p * (pluck ? .15 : .55), t + a, pluck ? .25 : .5); g.gain.setTargetAtTime(0, t + len, .45);
+        o.connect(g); g.connect(out); o.start(t); o.stop(t + len + 2.5);
+      });
+    }
+    f[1].forEach(function (s, i) { note(s + 12, now + i * .2, .5, .16, f[3]); });
+    f[2].forEach(function (s, i) { note(s, now + .9 + i * .03, 2.6, .09, f[3]); });
+    note(f[1][f[1].length - 1] + 12, now + 1.0, 2.4, .1, f[3]);
+    return true;
+  }
+  root.SFX = { fanfare: fanfare, play: play, setMusic: setMusic, config: config, unlock: unlock, get state() { return { ctx: ctx && ctx.state, music: musicEl && !musicEl.paused, track: musicTrack, voices: voices, loaded: Object.keys(buffers).length }; } };
 })(this);

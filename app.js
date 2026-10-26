@@ -529,11 +529,19 @@
     $('winText').innerHTML = (st.timed ? tile(fmtTime(st.elapsed), 'Time', best.time) : '') + tile(st.moves, 'Moves', best.moves) +
       (st.scoring !== 'none' ? tile((st.scoring === 'vegas' ? '$' : '') + st.score, 'Score' + (st.bonus ? ' (+' + st.bonus + ' bonus)' : ''), best.score) : '') +
       tile(stats.streak, 'Win streak', best.streak) + (st.daily ? tile('✓', 'Daily · ' + stats.dailyStreak + ' day streak') : '');
-    var style = settings.winStyle === 'auto' ? (theme.classic ? 'classic' : 'modern') : settings.winStyle;
-    sfx('win', { gain: 0.8, gap: 1 }); buzz([30, 60, 30, 60, 80]);
+    var style = settings.winStyle === 'classic' || theme.classic ? 'classic' : theme.id;
+    if (!(A.fanfare && A.fanfare(theme.id))) sfx('win', { gain: 0.5, gap: 1 }); buzz([30, 60, 30, 60, 80]);
     window.__winStyle = style;
-    if (style === 'classic') setTimeout(winAnimation, 350);
-    else { setTimeout(function () { FX.celebrate(5); fanFoundations(); }, 250); setTimeout(function () { window.__winAnimDone = true; open('mWin'); }, 1700); }
+    setTimeout(function () { celebrate(style); }, 300);
+  }
+  function celebrate(style) {
+    if (!window.Celebrate) { window.__winAnimDone = true; return open('mWin'); }
+    var cards = [], cw = L.cw;
+    st.found.forEach(function (pile) { pile.forEach(function (c) { var e = els[c.id], r = e.getBoundingClientRect(); cw = r.width || cw; cards.push({ s: c.s, r: c.r, from: { x: r.left + r.width / 2, y: r.top + r.height / 2 } }); }); });
+    var hid = st.found.map(function (p) { return p.map(function (c) { return els[c.id]; }); }).reduce(function (a, b) { return a.concat(b); }, []);
+    hid.forEach(function (e) { e.style.visibility = 'hidden'; });
+    bounce = Celebrate.play({ canvas: $('winfx'), style: style, cards: cards, cw: cw, faceURI: function (s, r) { return Art.faceURI(s, r, false, theme.id); },
+      onDone: function () { bounce = null; hid.forEach(function (e) { e.style.visibility = ''; }); window.__winAnimDone = true; open('mWin'); } });
   }
   function fanFoundations() { // kings hop in a wave
     for (var f = 0; f < 4; f++) (function (f) { var c = top(st.found[f]); if (!c) return; setTimeout(function () { var e = els[c.id]; e.classList.remove('land'); void e.offsetWidth; e.classList.add('land'); var s = boardToScreen(+e.dataset.x + L.cw / 2, +e.dataset.y + L.ch / 2); FX.burst(s.x, s.y, 30); }, f * 140); })(f);
@@ -571,7 +579,7 @@
     raf = requestAnimationFrame(frame);
   }
   $('winfx').addEventListener('pointerdown', function () { if (bounce) bounce.stop(); else $('winfx').style.display = 'none'; });
-  function hideWinFx() { var cv = $('winfx'); cv.style.display = 'none'; FX.clear(); if (bounce) { var b = bounce; bounce = null; b.stop(); } }
+  function hideWinFx() { if (window.Celebrate && Celebrate.active) Celebrate.stop(); bounce = null; var cv = $('winfx'); cv.style.display = 'none'; FX.clear(); document.querySelectorAll('.card').forEach(function (e) { if (e.style.visibility === 'hidden') e.style.visibility = ''; }); }
 
   // ---------- modals ----------
   function open(id) { $(id).hidden = false; sfx('tap', { gain: 0.45 }); padFocusFirst($(id)); }
