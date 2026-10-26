@@ -21,18 +21,23 @@
   // Max recycles of waste->stock. Infinity = unlimited.
   function recycleLimit(st) {
     if (st.scoring === 'vegas') return st.drawCount === 1 ? 0 : 2;
-    return Infinity;
+    return st.maxRecycles == null ? Infinity : st.maxRecycles; // difficulty redeal allowance
   }
   function newGame(opts) {
     opts = opts || {};
     var seed = opts.seed != null ? opts.seed : Math.floor(Math.random() * 4294967296);
     var deck = makeDeck(seed);
+    if (opts.perm) { // colour-preserving suit swap (S<->C, H<->D): same deal shape, so winnability is kept
+      var map = [opts.perm & 1 ? 3 : 0, opts.perm & 2 ? 2 : 1, opts.perm & 2 ? 1 : 2, opts.perm & 1 ? 0 : 3];
+      deck.forEach(function (c) { c.s = map[c.s]; c.id = SUITS[c.s] + c.r; });
+    }
     var st = {
       seed: seed, drawCount: opts.drawCount === 3 ? 3 : 1,
       scoring: opts.scoring || 'standard', timed: opts.timed !== false,
       stock: [], waste: [], found: [[], [], [], []], tab: [[], [], [], [], [], [], []],
       score: 0, moves: 0, recycles: 0, elapsed: 0, timePenalized: 0,
-      won: false, bonus: 0, started: false, history: []
+      won: false, bonus: 0, started: false, history: [],
+      maxRecycles: opts.maxRecycles == null || opts.maxRecycles === Infinity ? null : opts.maxRecycles, perm: opts.perm || 0
     };
     for (var c = 0; c < 7; c++) for (var k = c; k < 7; k++) { var card = deck.pop(); st.tab[k].push(card); }
     st.tab.forEach(function (p) { p[p.length - 1].up = true; });

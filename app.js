@@ -8,12 +8,27 @@
   function save(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) { if (k === 'game' && v.history && v.history.length > 20) { v.history = v.history.slice(-20); save(k, v); } } }
 
   var DEF = { v: 3, drawCount: 1, scoring: 'standard', timed: true, tapMove: true, autoFinish: true, back: 'auto', theme: 'casino',
-    sfx: 80, music: 45, haptics: true, winStyle: 'auto' };
+    sfx: 80, music: 45, haptics: true, winStyle: 'auto', level: 'easy', hints: true };
   var settings = load('settings', {});
   if (settings.v !== 3) settings = Object.assign({}, settings, { v: 3, back: 'auto', theme: 'casino' }); // upgrade: themes pick the back
   settings = Object.assign({}, DEF, settings);
-  var STATS0 = { played: 0, won: 0, bestTime: null, bestScore: null, fewestMoves: null, streak: 0, bestStreak: 0, dailyWon: 0, dailyStreak: 0, lastDaily: '', dailyDates: [] };
-  var stats = Object.assign({}, STATS0, load('stats', {}));
+  var STATS0 = { played: 0, won: 0, bestTime: null, bestScore: null, fewestMoves: null, streak: 0, bestStreak: 0, dailyWon: 0, dailyStreak: 0, lastDaily: '', dailyDates: [], lv: {} };
+  var stats = Object.assign({}, STATS0, load('stats', {})); stats.lv = stats.lv || {};
+  // ---------- difficulty ----------
+  // Deal hardness comes from verified-winnable seed pools (levels.js, built offline by tools/pools.js);
+  // the level also sets hint / undo / redeal allowances. Draw 1/3 and scoring stay the player's choice.
+  var INF = Infinity, LEVELS = [
+    { id: 'beginner', name: 'Beginner', rec: INF, hints: INF, undo: INF },
+    { id: 'easy', name: 'Easy', rec: INF, hints: INF, undo: INF },
+    { id: 'medium', name: 'Medium', rec: 3, hints: 10, undo: 50 },
+    { id: 'hard', name: 'Hard', rec: 2, hints: 5, undo: 25 },
+    { id: 'expert', name: 'Expert', rec: 1, hints: 2, undo: 10 },
+    { id: 'grandmaster', name: 'Grandmaster', rec: 0, hints: 0, undo: 3, gmHints: 2 }];
+  function lvById(id) { for (var i = 0; i < LEVELS.length; i++) if (LEVELS[i].id === id) return LEVELS[i]; return LEVELS[1]; }
+  function hintAllowance(lv) { if (!settings.hints) return 0; return lv.id === 'grandmaster' ? lv.gmHints : lv.hints; }
+  function poolFor(lv, draw) { var P = window.LEVEL_POOLS; return P && P[draw] && P[draw][lv.id] && P[draw][lv.id].length ? P[draw][lv.id] : null; }
+  function hash(str) { var h = 2166136261; for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function lvStat(id) { return stats.lv[id] || (stats.lv[id] = { p: 0, w: 0 }); }
   var params = new URLSearchParams(location.search);
   var st, els = {}, slots = {}, L = {}, busy = false, prevPile = {}, prevUp = {}, theme = THEMES.byId(settings.theme);
   var counted = false;
@@ -29,12 +44,13 @@
     r.setProperty('--accent', theme.accent); r.setProperty('--accent2', theme.accent2); r.setProperty('--ui', theme.ui);
     r.setProperty('--glow', theme.glow); r.setProperty('--slot', theme.slot);
     $('shade').style.background = theme.shade;
-    var url = 'bg/' + theme.id + '.webp', next = bgFlip ? $('bgA') : $('bgB'), prev = bgFlip ? $('bgB') : $('bgA');
+    var big = Math.max(screen.width, screen.height) * (window.devicePixelRatio || 1) > 2700 || Math.max(innerWidth, innerHeight) * (window.devicePixelRatio || 1) > 2700;
+    var url = 'bg/' + theme.id + (big ? '_4k' : '') + '.webp', next = bgFlip ? $('bgA') : $('bgB'), prev = bgFlip ? $('bgB') : $('bgA');
     var im = new Image(); im.onload = im.onerror = function () {
       next.style.backgroundImage = 'url(' + url + ')'; next.classList.add('on'); prev.classList.remove('on'); bgFlip = !bgFlip;
     }; im.src = url;
     document.querySelector('meta[name=theme-color]').setAttribute('content', theme.meta || '#0b0f14');
-    FX.setTheme(theme);
+    FX.setTheme(theme); if (window.ThemeCursor) ThemeCursor.set(theme.id);
     A.config({ sfx: settings.sfx / 100, music: settings.music / 100, flavor: theme.sfx });
     A.setMusic(theme.music);
     document.body.dataset.theme = theme.id;
@@ -43,12 +59,20 @@
   function backKey() { return settings.back === 'auto' ? theme.back : settings.back; }
 
   // ---------- game lifecycle ----------
-  function deal(seed, daily) {
-    st = K.newGame({ seed: seed, drawCount: settings.drawCount, scoring: settings.scoring, timed: settings.timed });
+  function deal(seed, daily, levelId) {
+    var picked = levelId || settings.level, rnd = picked === 'random';
+    if (rnd) picked = LEVELS[Math.floor(Math.random() * LEVELS.length)].id;
+    var lv = lvById(picked), pool = poolFor(lv, settings.drawCount), perm = 0, h;
+    if (seed == null && pool) {
+      if (daily) { h = hash(daily + ':' + lv.id + ':' + settings.drawCount); seed = pool[h % pool.length]; perm = (h >>> 16) & 3; }
+      else { seed = pool[Math.floor(Math.random() * pool.length)]; perm = Math.floor(Math.random() * 4); }
+    } else if (seed == null && daily) seed = dailySeed(daily) + LEVELS.indexOf(lv);
+    st = K.newGame({ seed: seed, drawCount: settings.drawCount, scoring: settings.scoring, timed: settings.timed, maxRecycles: lv.rec, perm: perm });
+    st.level = lv.id; st.randomLevel = rnd; st.hintsLeft = hintAllowance(lv); st.undoLeft = lv.undo; st.verified = !!pool;
     if (daily) st.daily = daily;
     counted = false; combo = 0; held = null; persist(); build(); render('deal');
   }
-  function countPlayed() { if (!counted && st.started) { counted = true; st.counted = true; stats.played++; save('stats', stats); } }
+  function countPlayed() { if (!counted && st.started) { counted = true; st.counted = true; stats.played++; if (st.level) lvStat(st.level).p++; save('stats', stats); } }
   function abandon() { if (st && st.started && !st.won) { stats.streak = 0; save('stats', stats); } }
   function persist() { var copy = Object.assign({}, st); copy.history = st.history.slice(-300); save('game', copy); }
   function nearWin() { // test/demo deal: one drag away from auto-complete
@@ -63,7 +87,12 @@
   }
   function todayStr(d) { d = d || new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function dailySeed(s) { return +s.replace(/-/g, '') * 7919 + 13; }
-  function startDaily() { abandon(); hideWinFx(); closeAll(); var d = todayStr(); deal(dailySeed(d), d); toast('Daily deal · ' + d); }
+  function dailyKeyLevel(s) { return s.level; } // every level has its own daily; the streak counts any of them once per day
+  function startDaily(levelId) {
+    abandon(); hideWinFx(); closeAll(); var d = todayStr(), lv = lvById(levelId || (settings.level === 'random' ? 'medium' : settings.level));
+    deal(null, d, lv.id); lvDone(d, lv.id) ; toast('Daily deal · ' + lv.name + ' · ' + d);
+  }
+  function lvDone(d, id) { return (stats.dailyLv || []).indexOf(d + ':' + id) >= 0; }
 
   // ---------- layout ----------
   var MIN_UP_FULL = 0.175, MIN_UP_COMPACT = 0.27, MIN_DOWN = 0.05;
@@ -213,6 +242,12 @@
     setChip('sMoves', 'cMoves', '' + st.moves);
     $('cDaily').hidden = !st.daily;
     $('bUndo').disabled = !st.history.length || busy;
+    var lv = lvById(st.level || 'easy');
+    $('cLevel').hidden = !st.level; $('sLevel').textContent = (st.randomLevel ? '🎲 ' : '') + lv.name;
+    $('bHint').hidden = !settings.hints;
+    var hl = st.hintsLeft, ul = st.undoLeft;
+    $('bHint').querySelector('span').textContent = 'Hint' + (hl != null && isFinite(hl) ? ' ' + hl : '');
+    $('bUndo').querySelector('span').textContent = 'Undo' + (ul != null && isFinite(ul) ? ' ' + ul : '');
   }
   var toastT;
   function toast(msg) { var t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove('on'); }, 1900); }
@@ -229,6 +264,8 @@
     var lead = els[ids[0]], x = +lead.dataset.x + L.cw / 2, y = +lead.dataset.y + L.ch / 2;
     if (to.pile === 'found') {
       sfx('place', { gain: 0.9 });
+      var landed = top(st.found[to.idx]);
+      if (landed && landed.r === 1) aceFx(to.idx);
       sfx('chime', { rate: Math.pow(2, PENTA[Math.min(combo - 1, PENTA.length - 1)] / 12), gain: 0.55, gap: 0.03, pan: (x / L.W - 0.5) * 0.6, delay: 0.12 });
       setTimeout(function () { var s = boardToScreen(x, y); FX.burst(s.x, s.y, 18 + Math.min(combo, 6) * 4); lead.classList.remove('land'); void lead.offsetWidth; lead.classList.add('land'); }, 230);
       buzz(14);
@@ -263,8 +300,9 @@
   }
   function doUndo() {
     if (busy || st.won) return; cancelHold();
-    var u = (st.undos || 0) + 1;
-    if (K.undo(st)) { st.undos = u; combo = 0; persist(); render(); sfx('slide', { rate: 0.85, gain: 0.6 }); buzz(6); }
+    var u = (st.undos || 0) + 1, keep = { hintsLeft: st.hintsLeft, undoLeft: st.undoLeft, level: st.level, randomLevel: st.randomLevel, verified: st.verified, daily: st.daily, counted: st.counted };
+    if (st.undoLeft != null && st.undoLeft !== null && st.undoLeft <= 0) { toast('No undos left at ' + lvById(st.level).name); sfx('bad', { gain: 0.3 }); return; }
+    if (K.undo(st)) { Object.assign(st, keep); if (st.undoLeft != null) st.undoLeft--; st.undos = u; status(); combo = 0; persist(); render(); sfx('slide', { rate: 0.85, gain: 0.6 }); buzz(6); }
   }
   function autoComplete() {
     busy = true; status(); $('bAuto').hidden = true;
@@ -280,6 +318,14 @@
     setTimeout(function () { var s = boardToScreen(+e.dataset.x + L.cw / 2, +e.dataset.y + L.ch / 2); FX.burst(s.x, s.y, 10); }, 220);
   }
   function top(p) { return p[p.length - 1]; }
+  function aceFx(f) { // themed flourish when an ace lands on its foundation (never blocks input)
+    var fp = foundXY(f);
+    setTimeout(function () {
+      var s = boardToScreen(fp.x + L.cw / 2, fp.y + L.ch / 2), s2 = boardToScreen(fp.x + L.cw, fp.y + L.ch);
+      FX.ace(s.x, s.y, (s2.x - s.x) * 2, (s2.y - s.y) * 2); window.__aceCount = (window.__aceCount || 0) + 1;
+      sfx('chime', { rate: 0.5, gain: 0.22, gap: 0.05 }); sfx('chime', { rate: 0.667, gain: 0.16, gap: 0.05, delay: 0.09 });
+    }, 200);
+  }
   // Greedy finish: once every tableau card is face up, play foundations first, then waste → tableau, then draw.
   function greedyStep(s) {
     var best = null;
@@ -322,7 +368,10 @@
   }
   var hintIdx = 0, hintKey = '';
   function doHint() {
-    if (busy || st.won) return;
+    if (busy || st.won || !settings.hints) return;
+    if (st.hintsLeft != null && st.hintsLeft <= 0) { toast('No hints left at ' + lvById(st.level).name); sfx('bad', { gain: 0.3 }); return; }
+    if (st.hintsLeft != null && isFinite(st.hintsLeft)) st.hintsLeft--;
+    status();
     clearHints(); sfx('tap', { gain: 0.5 });
     var moves = K.allMoves(st), key = st.moves + ':' + st.history.length;
     if (key !== hintKey) { hintKey = key; hintIdx = 0; }
@@ -365,7 +414,9 @@
     if (loc.pile === 'stock') { doDraw(); return; }
     if (!loc.card.up || (loc.pile !== 'tab' && loc.n !== 1)) return;
     var cards = pile(loc).slice(loc.j);
-    drag = { loc: loc, ids: cards.map(function (c) { return c.id; }), x0: ev.clientX, y0: ev.clientY, moved: false, pid: ev.pointerId, vx: 0, tilt: 0, lt: performance.now(), lx: ev.clientX, target: null };
+    var rc = ce.getBoundingClientRect(), gx = Math.max(0, Math.min(1, (ev.clientX - rc.left) / rc.width)), gy = Math.max(0, Math.min(1, (ev.clientY - rc.top) / rc.height));
+    drag = { loc: loc, ids: cards.map(function (c) { return c.id; }), x0: ev.clientX, y0: ev.clientY, moved: false, pid: ev.pointerId, vx: 0, tilt: 0, lt: performance.now(), lx: ev.clientX, target: null,
+      gx: gx, gy: gy, ang: 0, av: 0, pvx: 0, pdx: 0, pdy: 0, ft: 0, lag: [] };
     try { board.setPointerCapture(ev.pointerId); } catch (e) { }
   });
   board.addEventListener('pointermove', function (ev) {
@@ -374,21 +425,42 @@
     if (!drag.moved && Math.hypot(dx, dy) < 6) return;
     if (!drag.moved) {
       drag.moved = true; clearHints(); sfx('slide', { gain: 0.6 }); buzz(8);
-      drag.ids.forEach(function (id, i) { var e = els[id]; e.classList.add('drag'); e.classList.remove('settle'); e.style.zIndex = 5000 + i; e.style.transformOrigin = '50% ' + (-i * 18) + '%'; });
+      document.documentElement.classList.add('dragging');
+      var y0 = +els[drag.ids[0]].dataset.y, px = drag.gx * L.cw, py = drag.gy * L.ch;
+      drag.ids.forEach(function (id, i) { var e = els[id]; e.classList.add('drag'); e.classList.remove('settle'); e.style.zIndex = 5000 + i;
+        // every card in the stack pivots around the grab point on the lead card
+        e.style.transformOrigin = px.toFixed(1) + 'px ' + (py - (+e.dataset.y - y0)).toFixed(1) + 'px'; drag.lag.push({ x: 0, y: 0 }); });
+      // lever arm: grab off-centre and gravity hangs the card; grab dead-centre and it just tilts like before
+      var rx = L.cw / 2 - px, ry = L.ch / 2 - py; drag.beta = Math.atan2(rx, ry); drag.lever = Math.hypot(rx, ry); drag.arm = Math.min(1, Math.hypot(rx / (L.cw / 2), ry / (L.ch / 2)) / 1.2);
+      if (REDUCE) drag.arm *= 0.25;
+      drag.ft = performance.now();
     }
     var now = performance.now(), dt = Math.max(1, now - drag.lt);
     drag.vx = drag.vx * 0.7 + ((ev.clientX - drag.lx) / dt) * 0.3; drag.lt = now; drag.lx = ev.clientX;
     drag.dx = dx; drag.dy = dy;
     if (!dragRaf) dragRaf = requestAnimationFrame(dragFrame);
   });
-  function dragFrame() {
+  var REDUCE = false; try { REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { }
+  function dragFrame(now) {
     dragRaf = 0; if (!drag || !drag.moved) return;
+    now = now || performance.now(); var dt = Math.min(0.033, Math.max(0.001, (now - drag.ft) / 1000)); drag.ft = now;
+    // classic velocity tilt (kept), faded down as the lever arm grows
     var want = Math.max(-14, Math.min(14, drag.vx * 9));
     drag.tilt += (want - drag.tilt) * 0.35; drag.vx *= 0.85;
+    // damped pendulum around the grab point: gravity pulls the centre under the finger, horizontal acceleration swings it
+    var vxNow = (drag.dx - drag.pdx) / dt, ax = (vxNow - drag.pvx) / dt; drag.pvx += (vxNow - drag.pvx) * 0.5; drag.pdx = drag.dx;
+    ax = Math.max(-12000, Math.min(12000, ax));
+    var th = drag.ang, b = drag.beta, Lp = Math.max(12, drag.lever);
+    var acc = drag.arm * (-55 * Math.sin(th - b) + (ax / Lp) * 0.35 * Math.cos(th - b)) - drag.av * 6.5; // rad/s², ~1.2 Hz, damped
+    drag.av += acc * dt; drag.ang += drag.av * dt; drag.ang = Math.max(-1.3, Math.min(1.3, drag.ang));
+    var rot = drag.ang * 57.2958 + drag.tilt * (1 - drag.arm * 0.6);
     var lift = -Math.round(L.ch * 0.04);
-    drag.ids.forEach(function (id) { var e = els[id]; e.style.transform = tf(+e.dataset.x + drag.dx, +e.dataset.y + drag.dy + lift, ' rotate(' + drag.tilt.toFixed(2) + 'deg) scale(1.06)'); });
+    drag.ids.forEach(function (id, i) { var e = els[id], g = drag.lag[i], k = i ? Math.max(0.35, 0.7 - i * 0.06) : 1;
+      g.x += (drag.dx - g.x) * k; g.y += (drag.dy - g.y) * k; // trailing cards follow with a slight lag
+      e.style.transform = tf(+e.dataset.x + g.x, +e.dataset.y + g.y + lift, ' rotate(' + (rot * (1 - i * 0.04)).toFixed(2) + 'deg) scale(1.06)'); });
+    window.__dragAng = rot;
     var t = magnetTarget(); if ((t && t.key) !== (drag.target && drag.target.key)) { markTarget(drag.target, false); markTarget(t, true); drag.target = t; if (t) buzz(4); }
-    if (Math.abs(drag.tilt) > 0.2) dragRaf = requestAnimationFrame(dragFrame);
+    dragRaf = requestAnimationFrame(dragFrame); // keep swinging while held
   }
   function markTarget(t, on) { if (!t) return; var dst = pile(t.ref), last = dst[dst.length - 1]; var el = last ? els[last.id] : slots[(t.ref.pile === 'found' ? 'f' : 't') + t.ref.idx]; el.classList.toggle('drop-ok', on); }
   function magnetTarget() {
@@ -406,7 +478,7 @@
   }
   function endDrag(ev, cancel) {
     if (!drag || ev.pointerId !== drag.pid) return;
-    var d = drag; drag = null; cancelAnimationFrame(dragRaf); dragRaf = 0; markTarget(d.target, false);
+    var d = drag; drag = null; cancelAnimationFrame(dragRaf); dragRaf = 0; markTarget(d.target, false); document.documentElement.classList.remove('dragging');
     d.ids.forEach(function (id) { var e = els[id]; e.classList.remove('drag'); e.classList.add('settle'); e.style.transformOrigin = ''; setTimeout(function () { e.classList.remove('settle'); }, 360); });
     if (!d.moved) {
       if (cancel) return;
@@ -437,17 +509,18 @@
   function onWin() {
     if (st.winRecorded) return; st.winRecorded = true;
     cancelHold(); hidePadCursor(); $('bAuto').hidden = true;
-    countPlayed();
+    countPlayed(); if (st.level) lvStat(st.level).w++;
     var best = {};
     stats.won++; stats.streak++; if (stats.streak > stats.bestStreak) { stats.bestStreak = stats.streak; best.streak = stats.streak > 1; }
     if (st.timed && (stats.bestTime == null || st.elapsed < stats.bestTime)) { stats.bestTime = st.elapsed; best.time = true; }
     if (st.scoring !== 'none' && (stats.bestScore == null || st.score > stats.bestScore)) { stats.bestScore = st.score; best.score = true; }
     if (stats.fewestMoves == null || st.moves < stats.fewestMoves) { stats.fewestMoves = st.moves; best.moves = true; }
-    if (st.daily && stats.dailyDates.indexOf(st.daily) < 0) {
+    if (st.daily && stats.dailyDates.indexOf(st.daily) < 0 && (!st.level || st.level === dailyKeyLevel(st))) {
       var y = new Date(st.daily + 'T12:00'); y.setDate(y.getDate() - 1);
       stats.dailyStreak = stats.lastDaily === todayStr(y) ? stats.dailyStreak + 1 : 1;
       stats.lastDaily = st.daily; stats.dailyWon++; stats.dailyDates.push(st.daily); stats.dailyDates = stats.dailyDates.slice(-60);
     }
+    if (st.daily && st.level) { stats.dailyLv = (stats.dailyLv || []); if (stats.dailyLv.indexOf(st.daily + ':' + st.level) < 0) stats.dailyLv.push(st.daily + ':' + st.level); stats.dailyLv = stats.dailyLv.slice(-200); }
     save('stats', stats); persist(); status();
     var stars = 1 + (st.moves <= 130 ? 1 : 0) + (!st.undos ? 1 : 0);
     $('winStars').innerHTML = [0, 1, 2].map(function (i) { return '<span class="' + (i < stars ? '' : 'off') + '" style="animation-delay:' + (0.25 + i * 0.18) + 's">★</span>'; }).join('');
@@ -509,7 +582,23 @@
     m.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', function () { m.hidden = true; sfx('tap', { gain: 0.4 }); }); });
   });
   function requestNew() { cancelHold(); if (st.started && !st.won) open('mConfirm'); else newDeal(); }
-  function newDeal() { abandon(); hideWinFx(); closeAll(); if (pendingDaily) { pendingDaily = false; return startDaily(); } deal(); }
+  function newDeal() { abandon(); hideWinFx(); closeAll(); if (pendingDaily) { pendingDaily = false; return startDaily(pendingDailyLv); } deal(); dealToast(); }
+  function dealToast() { toast((st.randomLevel ? 'Random → ' : '') + lvById(st.level).name + ' · Draw ' + st.drawCount + ' · ' + ({ standard: 'Standard', vegas: 'Vegas', none: 'No' })[st.scoring] + ' scoring'); }
+  var pendingDailyLv = null;
+  // new-game + daily pickers
+  function lvButtons(daily) {
+    var d = todayStr();
+    return LEVELS.map(function (l) { return '<button data-lv="' + l.id + '" class="' + (!daily && settings.level === l.id ? 'sel' : '') + '"><b>' + l.name + '</b><small>' + (daily ? (lvDone(d, l.id) ? '✓ solved' : 'Today') : lvBlurb(l)) + '</small></button>'; }).join('') +
+      (daily ? '' : '<button data-lv="random" class="' + (settings.level === 'random' ? 'sel' : '') + '"><b>🎲 Random</b><small>Surprise me each deal</small></button>');
+  }
+  function lvBlurb(l) { var f = function (n) { return isFinite(n) ? n : '∞'; }; return 'Hints ' + f(l.id === 'grandmaster' ? (settings.hints ? l.gmHints : 0) : (settings.hints ? l.hints : 0)) + ' · Undo ' + f(l.undo) + ' · Redeals ' + f(l.rec); }
+  function openNew() { cancelHold(); $('lvGrid').innerHTML = lvButtons(false); $('lvMode').textContent = 'Draw ' + settings.drawCount + ' · ' + ({ standard: 'Standard', vegas: 'Vegas', none: 'No' })[settings.scoring] + ' scoring (change in Settings)'; open('mNew'); }
+  function openDaily() { cancelHold(); $('dlGrid').innerHTML = lvButtons(true); open('mDaily'); }
+  $('lvGrid').addEventListener('click', function (e) { var b = e.target.closest('[data-lv]'); if (!b) return; settings.level = b.dataset.lv; save('settings', settings); sfx('tap', { gain: 0.4 });
+    $('lvGrid').querySelectorAll('button').forEach(function (x) { x.classList.toggle('sel', x === b); }); });
+  $('lvDeal').addEventListener('click', function () { close('mNew'); pendingDaily = false; requestNew(); });
+  $('dlGrid').addEventListener('click', function (e) { var b = e.target.closest('[data-lv]'); if (!b) return; close('mDaily');
+    if (st.started && !st.won) { pendingDaily = true; pendingDailyLv = b.dataset.lv; open('mConfirm'); } else startDaily(b.dataset.lv); });
   var pendingDaily = false;
   $('cNewYes').addEventListener('click', newDeal);
   $('wNew').addEventListener('click', newDeal);
@@ -528,8 +617,8 @@
   $('mMenu').addEventListener('click', function (e) {
     var b = e.target.closest('[data-act]'); if (!b) return; var a = b.dataset.act; close('mMenu');
     if (a === 'resume') return;
-    if (a === 'new') { pendingDaily = false; requestNew(); }
-    if (a === 'daily') { if (st.started && !st.won) { pendingDaily = true; open('mConfirm'); } else startDaily(); }
+    if (a === 'new') openNew();
+    if (a === 'daily') openDaily();
     if (a === 'themes') openThemes();
     if (a === 'stats') { renderStats(); open('mStats'); }
     if (a === 'opts') openOpts();
@@ -556,13 +645,15 @@
     var rows = [['Played', stats.played], ['Won', stats.won], ['Win rate', pct + '%'], ['Streak', stats.streak], ['Best streak', stats.bestStreak],
       ['Best time', stats.bestTime == null ? '—' : fmtTime(stats.bestTime)], ['Fewest moves', stats.fewestMoves == null ? '—' : stats.fewestMoves],
       ['Best score', stats.bestScore == null ? '—' : stats.bestScore], ['Dailies won', stats.dailyWon]];
-    $('statsT').innerHTML = rows.map(function (r) { return '<div class="stat"><b>' + r[1] + '</b><small>' + r[0] + '</small></div>'; }).join('');
+    $('statsT').innerHTML = rows.map(function (r) { return '<div class="stat"><b>' + r[1] + '</b><small>' + r[0] + '</small></div>'; }).join('') +
+      '<div class="lvstats">' + LEVELS.map(function (l) { var x = lvStat(l.id); return '<div><span>' + l.name + '</span><b>' + x.w + ' / ' + x.p + '</b><small>' + (x.p ? Math.round(x.w / x.p * 100) : 0) + '%</small></div>'; }).join('') + '</div>';
   }
-  $('stReset').addEventListener('click', function () { stats = Object.assign({}, STATS0, { dailyDates: [] }); save('stats', stats); renderStats(); });
+  $('stReset').addEventListener('click', function () { stats = Object.assign({}, STATS0, { dailyDates: [], lv: {} }); save('stats', stats); renderStats(); });
   var pend = {};
   function openOpts() {
     cancelHold();
-    pend = { drawCount: settings.drawCount, scoring: settings.scoring, winStyle: settings.winStyle, back: settings.back };
+    pend = { drawCount: settings.drawCount, scoring: settings.scoring, winStyle: settings.winStyle, back: settings.back, level: settings.level };
+    $('oHints').checked = settings.hints;
     syncSegs();
     $('oTimed').checked = settings.timed; $('oTap').checked = settings.tapMove; $('oAutoFin').checked = settings.autoFinish; $('oHap').checked = settings.haptics;
     $('oSfx').value = settings.sfx; $('oMus').value = settings.music;
@@ -582,10 +673,12 @@
   $('oMus').addEventListener('input', function () { A.config({ music: this.value / 100 }); });
   $('mOpts').querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', function () { A.config({ sfx: settings.sfx / 100, music: settings.music / 100 }); }); });
   $('oSave').addEventListener('click', function () {
-    var redeal = pend.drawCount !== settings.drawCount || pend.scoring !== settings.scoring || $('oTimed').checked !== settings.timed;
-    Object.assign(settings, pend, { timed: $('oTimed').checked, tapMove: $('oTap').checked, autoFinish: $('oAutoFin').checked, haptics: $('oHap').checked, sfx: +$('oSfx').value, music: +$('oMus').value });
+    var redeal = pend.drawCount !== settings.drawCount || pend.scoring !== settings.scoring || $('oTimed').checked !== settings.timed || pend.level !== settings.level;
+    var hintsWas = settings.hints;
+    Object.assign(settings, pend, { hints: $('oHints').checked, timed: $('oTimed').checked, tapMove: $('oTap').checked, autoFinish: $('oAutoFin').checked, haptics: $('oHap').checked, sfx: +$('oSfx').value, music: +$('oMus').value });
     save('settings', settings); close('mOpts'); A.config({ sfx: settings.sfx / 100, music: settings.music / 100 });
-    if (redeal) { abandon(); deal(); toast('New deal · Draw ' + settings.drawCount + ' · ' + ({ standard: 'Standard', vegas: 'Vegas', none: 'no' })[settings.scoring] + ' scoring'); }
+    if (!redeal && hintsWas !== settings.hints && st.level) { st.hintsLeft = hintAllowance(lvById(st.level)); if (!settings.hints) clearHints(); persist(); }
+    if (redeal) { abandon(); deal(); dealToast(); }
     else render();
   });
 
@@ -634,7 +727,7 @@
     var t = st.tab[cur.col]; if (!t.length || !t[cur.i].up) return null;
     return { pile: 'tab', idx: cur.col, j: cur.i, n: t.length - cur.i, card: t[cur.i] };
   }
-  function liftHeld() { var dy = -L.ch * 0.12; held.ids.forEach(function (id, k) { var e = els[id]; e.classList.add('held'); e.style.zIndex = 5000 + k; e.style.transform = tf(+e.dataset.x, +e.dataset.y + dy, ' scale(1.04)'); }); }
+  function liftHeld() { var dy = -L.ch * 0.12; held.ids.forEach(function (id, k) { var e = els[id]; e.classList.add('held'); if (!REDUCE) { e.classList.remove('sway'); void e.offsetWidth; e.classList.add('sway'); } e.style.zIndex = 5000 + k; e.style.transform = tf(+e.dataset.x, +e.dataset.y + dy, ' scale(1.04)'); }); }
   function cancelHold() { if (!held) return; held.ids.forEach(function (id) { if (els[id]) els[id].classList.remove('held'); }); held = null; if (st) render(); }
   function padA() {
     if (busy || st.won) return; showPadCursor(); clampCur();
@@ -737,11 +830,12 @@
   applyTheme(settings.theme, true);
   var saved = load('game', null);
   if (params.has('nearwin')) nearWin();
-  else if (params.has('seed')) deal(+params.get('seed'));
+  else if (params.has('seed')) deal(+params.get('seed'), null, params.get('level'));
+  else if (params.has('level')) deal(null, null, params.get('level'));
   else if (saved && saved.tab && !saved.won) { st = saved; st.history = st.history || []; counted = !!st.counted; build(); render(true); }
   else deal();
   window.SOL = { get state() { return st; }, layout: function () { return L; }, deal: deal, nearWin: nearWin, render: render, K: K,
     applyTheme: function (id) { applyTheme(id); save('settings', settings); }, settings: settings, solvable: solvable, autoFinish: autoFinish,
-    act: act, get cursor() { return cur; }, get held() { return held; }, get busy() { return busy; }, startDaily: startDaily, stats: function () { return stats; } };
+    act: act, get cursor() { return cur; }, get held() { return held; }, get busy() { return busy; }, startDaily: startDaily, LEVELS: LEVELS, openNew: openNew, openDaily: openDaily, doHint: doHint, stats: function () { return stats; } };
 })();
 if ('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(function () { });

@@ -204,3 +204,22 @@ svg{fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-l
 .help{padding-left:18px;line-height:1.5;color:#d9d3c4;font-size:14.5px}.help li{margin-bottom:6px}
 .credits p{font-size:14px}
 @media (prefers-reduced-motion:reduce){.card{transition-duration:.12s}.db.pulse::after,#bAuto,.win .burst{animation:none}}
+/* v4: theme cursors (fine pointers only) */
+html.tcur, html.tcur body, html.tcur button, html.tcur .slot, html.tcur label, html.tcur .th, html.tcur .link, html.tcur #winfx { cursor: var(--cur, default) }
+html.tcur .card { cursor: var(--cur-grab, grab) }
+html.tcur.dragging, html.tcur.dragging * { cursor: var(--cur-grabbing, grabbing) !important }
+#padCursor { box-shadow: 0 0 18px var(--glow), inset 0 0 10px var(--glow) }
+/* controller pick-up: a mild pendulum swing using the independent rotate property */
+.card.held.sway { animation: sway .9s cubic-bezier(.3,.6,.4,1) }
+@keyframes sway { 0% { rotate: 0deg } 18% { rotate: -5deg } 40% { rotate: 3.2deg } 62% { rotate: -1.6deg } 82% { rotate: .6deg } 100% { rotate: 0deg } }
+/* difficulty pickers */
+.lvgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 }
+.lvgrid button { border: 2px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(255,255,255,.07); color: #f7f2e4; padding: 12px 10px; text-align: left; display: flex; flex-direction: column; gap: 4px; cursor: pointer; transition: transform .16s var(--spring), border-color .2s }
+.lvgrid button b { font-size: 16px } .lvgrid button small { font-size: 12px; opacity: .75 }
+.lvgrid button.sel { border-color: var(--accent); box-shadow: 0 0 16px var(--glow) }
+.lvgrid button:hover { transform: translateY(-2px) }
+.lvstats { grid-column: 1/-1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px }
+.lvstats div { background: rgba(255,255,255,.06); border-radius: 10px; padding: 6px 8px; display: flex; flex-direction: column; font-size: 12px }
+.lvstats b { font-size: 15px }
+.chip.lvl b { font-size: 13px; min-width: 0 }
+.db[hidden] { display: none }

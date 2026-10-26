@@ -31,6 +31,7 @@
       <div class="chip" id="cScore"><svg><use href="#i-star"/></svg><b id="sScore">0</b></div>
       <div class="chip" id="cTime"><svg><use href="#i-clock"/></svg><b id="sTime">0:00</b></div>
       <div class="chip" id="cMoves"><svg><use href="#i-moves"/></svg><b id="sMoves">0</b></div>
+      <div class="chip lvl" id="cLevel" hidden><svg><use href="#i-star"/></svg><b id="sLevel"></b></div>
       <div class="chip daily" id="cDaily" hidden><svg><use href="#i-cal"/></svg><b>Daily</b></div>
     </div>
   </header>
@@ -71,6 +72,18 @@
   <div class="row"><button class="btn primary" data-close>Done</button></div>
 </div></div>
 
+<div class="modal" id="mNew" hidden><div class="panel wide">
+  <h2>New game</h2><p class="sub" id="lvMode"></p>
+  <div class="lvgrid" id="lvGrid"></div>
+  <div class="row"><button class="btn" data-close>Cancel</button><button class="btn primary" id="lvDeal">Deal</button></div>
+</div></div>
+
+<div class="modal" id="mDaily" hidden><div class="panel wide">
+  <h2>Daily deals</h2><p class="sub">One winnable deal per difficulty, every day. Uses your current draw and scoring mode.</p>
+  <div class="lvgrid" id="dlGrid"></div>
+  <div class="row"><button class="btn" data-close>Close</button></div>
+</div></div>
+
 <div class="modal" id="mConfirm" hidden><div class="panel">
   <h2 id="cfTitle">Start a new game?</h2><p id="cfText">Your current game will count as a loss.</p>
   <div class="row"><button class="btn" data-close>Keep playing</button><button class="btn primary" id="cNewYes">Deal</button></div>
@@ -82,6 +95,10 @@
     <section><h3>Game</h3>
       <div class="seg" data-opt="drawCount"><button data-v="1">Draw 1</button><button data-v="3">Draw 3</button></div>
       <div class="seg" data-opt="scoring"><button data-v="standard">Standard</button><button data-v="vegas">Vegas</button><button data-v="none">No score</button></div>
+      <h3>Difficulty</h3>
+      <div class="seg lvseg" data-opt="level"><button data-v="beginner">Beginner</button><button data-v="easy">Easy</button><button data-v="medium">Medium</button><button data-v="hard">Hard</button></div>
+      <div class="seg lvseg" data-opt="level"><button data-v="expert">Expert</button><button data-v="grandmaster">Grandmaster</button><button data-v="random">🎲 Random</button></div>
+      <label class="tog"><input type="checkbox" id="oHints"><span></span>Hints</label>
       <label class="tog"><input type="checkbox" id="oTimed"><span></span>Timed game</label>
       <label class="tog"><input type="checkbox" id="oTap"><span></span>Tap a card to auto-move</label>
       <label class="tog"><input type="checkbox" id="oAutoFin"><span></span>Offer auto-finish</label>
@@ -95,7 +112,7 @@
     </section>
     <section class="full"><h3>Card back</h3><div id="backs"></div></section>
   </div>
-  <p class="note">Draw, scoring and timer changes start a new deal.</p>
+  <p class="note">Draw, scoring, difficulty and timer changes start a new deal.</p>
   <div class="row"><button class="btn" data-close>Cancel</button><button class="btn primary" id="oSave">Save</button></div>
 </div></div>
 
@@ -134,6 +151,8 @@
 </div></div>
 
 <script src="engine.js"></script>
+<script src="levels.js"></script>
+<script src="cursors.js"></script>
 <script src="cards.js"></script>
 <script src="themes.js"></script>
 <script src="audio.js"></script>

@@ -1,4 +1,4 @@
-var CACHE = 'solitaire-v3', FILES = ['./', 'index.html', 'style.css', 'engine.js', 'cards.js', 'themes.js', 'audio.js', 'fx.js', 'app.js', 'manifest.json',
+var CACHE = 'solitaire-v4', FILES = ['./', 'index.html', 'style.css', 'engine.js', 'levels.js', 'cursors.js', 'cards.js', 'themes.js', 'audio.js', 'fx.js', 'app.js', 'manifest.json',
   'fonts/outfit.woff2', 'fonts/cinzel.woff2',
   'bg/casino.webp', 'bg/casino_t.webp', 'bg/walnut_t.webp', 'bg/neon_t.webp', 'bg/forest_t.webp', 'bg/nebula_t.webp', 'bg/zen_t.webp', 'bg/reef_t.webp', 'bg/classic_t.webp',
   'audio/slide0.wav', 'audio/slide1.wav', 'audio/slide2.wav', 'audio/slide3.wav', 'audio/place0.wav', 'audio/place1.wav', 'audio/place2.wav', 'audio/place3.wav',
