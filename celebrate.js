@@ -140,7 +140,8 @@
       ctx.globalAlpha = 1;
     } };
   S.nebula = { dur: 7.4, init: function () { run.stars = []; for (var i = 0; i < n(240); i++) run.stars.push({ a: rnd(0, TAU), d: rnd(.02, 1), s: rnd(.4, 1.4) });
-      var im = new Image(); im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(root.ThemeCursor ? ThemeCursor.svg('nebula', 'grab') : '<svg xmlns="http://www.w3.org/2000/svg"/>'); run.ship = im; },
+      var im = new Image(); im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(root.ThemeCursor ? ThemeCursor.svg('nebula', 'grab') : '<svg xmlns="http://www.w3.org/2000/svg"/>'); run.ship = { complete: false };
+      im.onload = function () { var s = Math.ceil(92 * run.u * dpr), b = document.createElement('canvas'); b.width = b.height = s; b.getContext('2d').drawImage(im, 0, 0, s, s); b.complete = true; run.ship = b; }; }, // v7: bitmap once, not an SVG redraw every frame
     frame: function (t, dt) {
       var cx = W / 2, cy = H * .48, M = Math.hypot(W, H) / 2; veil('#04001a', .7 * ease(t / .7));
       var warp = cl((t - 2.4) / 1.6, 0, 1), wv = warp * warp * (1 - cl((t - 4.4) / .6, 0, 1));
@@ -214,7 +215,7 @@
     } };
   // ---------- driver ----------
   function raster(cards, faceURI, cw, done) {
-    var left = cards.length, out = [], scale = 2.7 * dpr, pad = Math.ceil(cw * .08);
+    var left = cards.length, out = [], scale = (root.Perf && (Perf.phone || Perf.level) ? 1.5 : 2.7) * dpr, pad = Math.ceil(cw * .08);
     cards.forEach(function (c, k) { var im = new Image(); im.onload = im.onerror = function () {
       var w = Math.ceil(cw * scale), h = Math.ceil(cw * 1.4 * scale), p = Math.ceil(pad * scale), cn = document.createElement('canvas'); cn.width = w + p * 2; cn.height = h + p * 2;
       var x = cn.getContext('2d'); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = p * .7; x.shadowOffsetY = p * .3; try { x.drawImage(im, p, p, w, h); } catch (e) { }
@@ -222,11 +223,11 @@
   }
   function play(o) {
     stop(true);
-    cv = o.canvas; var big = innerWidth * innerHeight; dpr = Math.min(root.devicePixelRatio || 1, Math.sqrt(8.3e6 / big), 3); W = innerWidth; H = innerHeight;
+    cv = o.canvas; var big = innerWidth * innerHeight; dpr = Math.min(root.devicePixelRatio || 1, Math.sqrt(8.3e6 / big), 3, root.Perf ? Perf.fxDpr() : 3); W = innerWidth; H = innerHeight;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.display = 'block'; cv.style.opacity = '1'; ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     var reduce = root.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches, scene = S[o.style] || S.casino;
     var CW = cl(Math.min(W / 6.2, H / 6.5), 56, 190);
-    run = { o: o, t: 0, parts: [], cards: o.cards, spr: [], CW: CW, CH: CW * 1.4, s0: o.cw / CW, u: cl(Math.min(W, H) / 700, .6, 2.2), q: reduce ? .3 : (W * H < 6e5 ? .65 : 1), scene: scene, dur: scene.dur, frames: 0, slow: 0, last: 0 };
+    run = { o: o, t: 0, parts: [], cards: o.cards, spr: [], CW: CW, CH: CW * 1.4, s0: o.cw / CW, u: cl(Math.min(W, H) / 700, .6, 2.2), q: reduce ? .3 : (W * H < 6e5 ? .65 : 1) * (root.Perf ? [1, .7, .5][Perf.level] : 1), scene: scene, dur: scene.dur, frames: 0, slow: 0, last: 0 };
     root.__winAnimStarted = true; root.__celebration = { style: o.style, t: 0 };
     var me = run;
     raster(o.cards, o.faceURI, CW, function (s) { if (run !== me) return; run.spr = s; if (scene.init) scene.init(); run.raf = requestAnimationFrame(frame); });
@@ -236,7 +237,7 @@
   function skipKey(e) { if (run && !e.repeat) { e.preventDefault(); e.stopPropagation(); skip(); } }
   function frame(now) {
     if (!run) return; var r = run, raw = r.last ? (now - r.last) / 1000 : 1 / 60, dt = Math.min(.05, raw); r.last = now; r.t += dt; r.frames++;
-    if (r.frames > 20 && raw > .024) { r.slow++; if (r.slow > 12 && r.q > .3) { r.q *= .7; r.slow = 0; } } else r.slow = Math.max(0, r.slow - 1);
+    if (r.frames > 8 && raw > .024) { r.slow++; if (r.slow > 4) { r.slow = 0; var cap = root.Perf ? Perf.fxDpr() : 1; if (dpr > cap + .01 && r.scene !== S.classic) { dpr = cap; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); } else if (r.q > .25) r.q *= .7; } } else r.slow = Math.max(0, r.slow - 1);
     if (r.scene !== S.classic) ctx.clearRect(0, 0, W, H); else ctx.clearRect(0, 0, W, H);
     r.scene.frame(r.t, dt); stepParts(dt); root.__celebration.t = r.t; root.__celebration.q = r.q; root.__celebration.parts = r.parts.length;
     if (r.t > r.dur - .7 && !r.fading) { r.fading = 1; cv.style.transition = 'opacity .7s'; cv.style.opacity = '0'; }

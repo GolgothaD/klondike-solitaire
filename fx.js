@@ -8,7 +8,7 @@
   try { reduce = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { }
   function size() {
     W = innerWidth; H = innerHeight;
-    dpr = Math.min((root.devicePixelRatio || 1) * qual, 3840 / Math.max(1, W)); if (dpr < 1 && qual >= 1) dpr = Math.min(1, root.devicePixelRatio || 1);
+    dpr = Math.max(0.75, Math.min((root.Perf ? Perf.fxDpr() : (root.devicePixelRatio || 1)) * qual, 3840 / Math.max(1, W)));
     [amb, top].forEach(function (c) { c.width = W * dpr; c.height = H * dpr; c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0); });
     seedAmbient();
   }
@@ -98,7 +98,7 @@
     var raw = now - (last || now), dt = Math.min(0.05, raw / 1000); last = now;
     // auto resolution: sustained slow frames drop the backing store, sustained fast ones restore it
     if (raw > 24 && raw < 200) { slow++; fast = 0; } else if (raw > 0 && raw < 18) { fast++; slow = Math.max(0, slow - 1); }
-    if (slow > 45 && qual > 0.5) { qual = Math.max(0.5, qual - 0.25); slow = 0; size(); }
+    if (slow > 20 && qual > 0.5) { qual = Math.max(0.5, qual - 0.25); slow = 0; size(); }
     else if (fast > 600 && qual < 1) { qual = Math.min(1, qual + 0.25); fast = 0; size(); }
     stepAmb(dt, now); stepFx(dt);
   }
@@ -160,5 +160,5 @@
     clear: function () { parts = []; },
     get count() { return parts.length; }
   };
-  addEventListener('resize', size); size(); raf = requestAnimationFrame(loop);
+  addEventListener('resize', size); if (root.Perf) Perf.onChange(size); size(); raf = requestAnimationFrame(loop);
 })(this);

@@ -168,7 +168,9 @@
   function allCards() { return [].concat(st.stock, st.waste, st.found[0], st.found[1], st.found[2], st.found[3], st.tab[0], st.tab[1], st.tab[2], st.tab[3], st.tab[4], st.tab[5], st.tab[6]); }
   function placeSlot(key, x, y) { var s = slots[key].style; s.left = x + 'px'; s.top = y + 'px'; s.width = L.cw + 'px'; s.height = L.ch + 'px'; s.fontSize = (L.cw * 0.42) + 'px'; }
   function tf(x, y, extra) { return 'translate3d(' + Math.round(x) + 'px,' + Math.round(y) + 'px,0)' + (extra || ''); }
-  function srcFor(c) { return c.up ? Art.faceURI(c.s, c.r, L.compact) : Art.backURI(backKey()); }
+  function srcFor(c) { var u = c.up ? Art.faceURI(c.s, c.r, L.compact) : Art.backURI(backKey()); return window.Perf ? Perf.raster(u, Math.round(L.cw), Math.round(L.ch), swapRaster) : u; }
+  function prewarm() { if (!window.Perf || !L || !L.cw) return; for (var s = 0; s < 4; s++) for (var r = 1; r <= 13; r++) srcFor({ up: true, s: s, r: r }); }
+  function swapRaster(uri, url) { for (var id in els) { var im = els[id].firstChild; if (im && im.getAttribute('src') === uri) im.setAttribute('src', url); } }
   function setSrc(e, src) { var im = e.firstChild; if (im.getAttribute('src') !== src) im.setAttribute('src', src); }
   function flipTo(e, src, delay) {
     setTimeout(function () {
@@ -205,7 +207,7 @@
     });
     if (held) liftHeld();
     if (instant) { void board.offsetWidth; board.classList.remove('notrans'); }
-    status(); updateAuto(); placeCursor();
+    status(); updateAuto(); placeCursor(); prewarm();
   }
   function renderDeal(pos, sp) {
     // all cards start face down on the stock, then fly out in real deal order and flip on landing
@@ -213,7 +215,7 @@
     allCards().forEach(function (c) {
       var e = els[c.id], p = pos[c.id];
       e.style.width = L.cw + 'px'; e.style.height = L.ch + 'px'; e.style.transitionDelay = '';
-      setSrc(e, Art.backURI(backKey())); e.style.zIndex = p.z; e.style.visibility = '';
+      setSrc(e, srcFor({ up: false })); e.style.zIndex = p.z; e.style.visibility = '';
       e.style.transform = tf(sp.x, sp.y); e.dataset.x = p.x; e.dataset.y = p.y;
       prevPile[c.id] = p.pile; prevUp[c.id] = c.up;
     });
@@ -452,8 +454,9 @@
     var vxNow = (drag.dx - drag.pdx) / dt, ax = (vxNow - drag.pvx) / dt; drag.pvx += (vxNow - drag.pvx) * 0.5; drag.pdx = drag.dx;
     ax = Math.max(-12000, Math.min(12000, ax));
     var th = drag.ang, b = drag.beta, Lp = Math.max(12, drag.lever);
-    var acc = drag.arm * (-55 * Math.sin(th - b) + (ax / Lp) * 0.35 * Math.cos(th - b)) - drag.av * 6.5; // rad/s², ~1.2 Hz, damped
-    drag.av += acc * dt; drag.ang += drag.av * dt; drag.ang = Math.max(-1.3, Math.min(1.3, drag.ang));
+    // v7: stiffer wrist — gravity hangs toward the lever angle but a spring holds it back (~16° rest at a corner), near-critical damping settles in ~0.3 s
+    var acc = drag.arm * (-55 * Math.sin(th - b) - 62 * th + (ax / Lp) * 0.22 * Math.cos(th - b)) - drag.av * 17;
+    drag.av += acc * dt; drag.ang += drag.av * dt; drag.ang = Math.max(-0.75, Math.min(0.75, drag.ang));
     var rot = drag.ang * 57.2958 + drag.tilt * (1 - drag.arm * 0.6);
     var lift = -Math.round(L.ch * 0.04);
     drag.ids.forEach(function (id, i) { var e = els[id], g = drag.lag[i], k = i ? Math.max(0.35, 0.7 - i * 0.06) : 1;
@@ -553,7 +556,7 @@
     var ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     var br = board.getBoundingClientRect(), queue = [];
     for (var r = 13; r >= 1; r--) for (var f = 0; f < 4; f++) { var c = st.found[f][r - 1]; if (c) queue.push({ c: c, f: f }); }
-    var imgs = {}; queue.forEach(function (q) { var im = new Image(); im.src = Art.faceURI(q.c.s, q.c.r, L.compact); imgs[q.c.id] = im; });
+    var imgs = {}; queue.forEach(function (q) { var im = new Image(); im.src = srcFor({ up: true, s: q.c.s, r: q.c.r }); imgs[q.c.id] = im; });
     var cur = null, floor = innerHeight, w = L.cw, h = L.ch, done = false, raf;
     window.__winAnimStarted = true;
     function launch() {
@@ -611,7 +614,7 @@
   var pendingDaily = false;
   $('cNewYes').addEventListener('click', newDeal);
   $('wNew').addEventListener('click', newDeal);
-  $('bNew').addEventListener('click', function () { pendingDaily = false; requestNew(); });
+  $('bNew').addEventListener('click', function () { pendingDaily = false; openNew(); });
   $('bUndo').addEventListener('click', doUndo);
   $('bHint').addEventListener('click', doHint);
   $('bTheme').addEventListener('click', openThemes);
@@ -812,7 +815,7 @@
   document.addEventListener('keydown', function (e) {
     var k = e.key, m = topModal();
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') { e.preventDefault(); return doUndo(); }
-    if (k === 'F2') { e.preventDefault(); return requestNew(); }
+    if (k === 'F2') { e.preventDefault(); return openNew(); }
     if (k === 'Escape') { if (held) return cancelHold(); if (m) return modalBack(m); return openMenu(); }
     var dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }[k];
     if (dir) { if (m && document.activeElement && document.activeElement.type === 'range' && (dir === 'left' || dir === 'right')) return; e.preventDefault(); padUsed = true; return act(dir); }
